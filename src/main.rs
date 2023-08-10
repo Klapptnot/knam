@@ -33,7 +33,6 @@ fn main() {
     }
     let args = Args::parse();
 
-    let mut same_name: i32 = 0;
     for file_path in args.rename_items.iter() {
         let path = Path::new(file_path);
         if !path.exists() {
@@ -59,12 +58,11 @@ fn main() {
                 .unwrap()
                 .join(format!("{}{}", new_name, &ext));
             if new_path.exists() {
-                same_name += 1;
-                new_path = abs_path
-                    .parent()
-                    .unwrap()
-                    .join(format!("{}_({}){}", new_name, same_name, ext));
-                println!("{}", &new_path.to_string_lossy());
+                new_path = abs_path.parent().unwrap().join(get_name_iter(
+                    abs_path.parent().unwrap(),
+                    new_name,
+                    ext,
+                ));
             }
             if let Err(err) = fs::rename(&abs_path, new_path) {
                 println!(
@@ -98,4 +96,53 @@ fn format_string(input: &str) -> String {
         }
     });
     result.to_string()
+}
+
+fn get_name_iter(path: &Path, name: String, ext: String) -> String {
+    let mut idx: i32 = 1;
+    let mut lpos: i32 = 0;
+    let mut rpos: i32 = 16;
+    let parent = dunce::canonicalize(path);
+    // Idk the number of existing files
+    loop {
+        if parent
+            .as_ref()
+            .unwrap()
+            .join(format!("{} ({}){}", name, rpos, ext))
+            .exists()
+        {
+            // Set the range to rpos..(rpos + 32)
+            lpos = rpos;
+            rpos += 32;
+            continue;
+        }
+        // Decrease range size
+        if rpos > 16 {
+            if parent
+                .as_ref()
+                .unwrap()
+                .join(format!("{} ({}){}", name, rpos - 16, ext))
+                .exists()
+            {
+                lpos += 16;
+            } else {
+                rpos -= 16;
+            }
+        }
+        // But here I know where to look for an available index
+        for i in lpos..rpos {
+            if !parent
+                .as_ref()
+                .unwrap()
+                .join(format!("{} ({}){}", name, i + 1, ext))
+                .exists()
+            {
+                // Break when the file name doesn't exist
+                idx = i + 1;
+                break;
+            }
+        }
+        break;
+    }
+    format!("{} ({}){}", name, idx, ext)
 }
